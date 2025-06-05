@@ -249,6 +249,7 @@ with tabs[1]:
 
             if path:
                 st.success(f"✅ Ruta encontrada: {' → '.join(path)} | Costo total: {cost}")
+               
                 # Vuelve a dibujar la red con la ruta en rojo
                 st.pyplot(adapter.draw_network(route=path))
 

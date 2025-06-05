@@ -50,7 +50,7 @@ class NetworkXAdapter:
         edge_colors = []
         for u, v in self.nx_graph.edges:
             if route and self._is_edge_in_route(u, v, route):
-                edge_colors.append("red")
+                edge_colors.append("#000000")
             else:
                 edge_colors.append("gray")
 
