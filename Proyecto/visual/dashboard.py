@@ -1,4 +1,10 @@
 import streamlit as st
+import random
+
+from model.graph import Node, Edge, Graph
+
+
+
 
 # Configurar la página
 st.set_page_config(
@@ -6,6 +12,7 @@ st.set_page_config(
     layout="wide",
     page_icon="🚁"
 )
+
 
 # ===== ESTILO PERSONALIZADO (CSS) =====
 st.markdown("""
@@ -99,24 +106,74 @@ with tabs[0]:
     if st.button("🚀 Ejecutar Simulación"):
         st.success("✅ Simulación iniciada correctamente.")
         st.session_state.sim_started = True
+        
+        def generate_unique_ids(n):
+            """
+            Genera hasta n IDs únicos tipo Excel (A, B, ..., Z, AA, AB, ..., AZ, ..., AAA, etc.)
+            """
+            ids = []
+            i = 0
+            while len(ids) < n:
+                s = ""
+                temp = i
+                while True:
+                    s = chr(ord('A') + temp % 26) + s
+                    temp = temp // 26 - 1
+                    if temp < 0:
+                        break
+                ids.append(s)
+                i += 1
+            return ids
+        
+        def generate_graph(n_nodes, n_edges, client_ratio=0.6, storage_ratio=0.2):
+            graph = Graph()
 
-    if st.session_state.get("sim_started"):
-        st.info("📡 Simulación activa...")
+            roles = (
+                ['cliente'] * int(n_nodes * client_ratio) +
+                ['almacenamiento'] * int(n_nodes * storage_ratio) +
+                ['recarga'] * (n_nodes - int(n_nodes * client_ratio) - int(n_nodes * storage_ratio))
+            )
+            random.shuffle(roles)
 
+            ids = generate_unique_ids(n_nodes)
+            node_map = {}
 
-# ===== PLACEHOLDERS PARA OTRAS TABS =====
-with tabs[1]:
-    st.subheader("📡 Red de Nodos")
-    st.warning("🌐 Módulo de visualización de red próximamente...")
+            for i in range(n_nodes):
+                node = Node(ids[i], ids[i], roles[i])
+                graph.add_node(node)
+                node_map[ids[i]] = node
 
-with tabs[2]:
-    st.subheader("📋 Pedidos y Clientes")
-    st.warning("📦 Visualización de pedidos en desarrollo.")
+            connected = set()
+            available = set(ids)
+            current = ids[0]
+            connected.add(current)
+            available.remove(current)
 
-with tabs[3]:
-    st.subheader("🚦 Análisis de Rutas")
-    st.warning("🛣️ Aquí podrás ver rutas optimizadas y resultados logísticos.")
+            # Asegurar conectividad mínima
+            while available:
+                next_node = available.pop()
+                origin = node_map[current]
+                destination = node_map[next_node]
+                weight = random.randint(5, 25)
+                graph.add_edge(Edge(origin, destination, weight))
+                connected.add(next_node)
+                current = next_node
 
-with tabs[4]:
-    st.subheader("📈 Estadísticas")
-    st.warning("📊 Módulo de estadísticas generales próximamente.")
+            # Agregar aristas adicionales
+            while len(graph.edges) < n_edges:
+                u, v = random.sample(ids, 2)
+                if u != v:
+                    origin = node_map[u]
+                    destination = node_map[v]
+                    weight = random.randint(5, 25)
+                    graph.add_edge(Edge(origin, destination, weight))
+
+            return graph
+        
+        # Crear y guardar grafo en session_state
+        st.session_state.graph = generate_graph(number_of_nodes, number_of_edges)
+        
+
+        
+    if st.session_state.get("sim_started", False):
+        st.info("🔄 Simulación en curso... Espere a que se completen los cálculos.")
