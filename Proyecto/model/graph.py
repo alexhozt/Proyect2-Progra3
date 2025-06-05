@@ -1,8 +1,5 @@
-import random 
-import string 
-
 class Graph:
-    def __intit__(self):
+    def __init__(self):
         self.nodes = []
         self.edges = []
 
@@ -19,18 +16,13 @@ class Graph:
     def get_edges(self):
         return self.edges
     
-
 class Node:
     def __init__(self,id,label,type):
         self.id = id
         self.label = label
         self.type = type
 
-class Edge:
-    def __init__(self, origin, destination, weight):
-        self.origin = origin
-        self.destination = destination
-        self.weight = weight
+
 
 
 

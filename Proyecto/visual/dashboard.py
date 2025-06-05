@@ -1,7 +1,17 @@
 import streamlit as st
 import random
+import string
+import sys
+import os
 
-from model.graph import Node, Edge, Graph
+# Agrega el directorio raíz del proyecto a sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from model.graph import Node, Graph
+from model.edge import Edge
+from networkx_adapter import NetworkXAdapter
+from collections import deque
+from avl_visualizer import AVLVisualizer
 
 
 
@@ -172,8 +182,120 @@ with tabs[0]:
         
         # Crear y guardar grafo en session_state
         st.session_state.graph = generate_graph(number_of_nodes, number_of_edges)
-        
-
-        
+              
     if st.session_state.get("sim_started", False):
         st.info("🔄 Simulación en curso... Espere a que se completen los cálculos.")
+
+
+# ===== funcion auxiliar =====
+
+def bfs_with_battery(graph, origin_id, destination_id, battery_limit=50):
+    visited = set()
+    queue = deque()
+    # Cada elemento es (nodo_actual, ruta_hasta_ahora, costo_actual)
+    queue.append((origin_id, [origin_id], 0))
+
+    while queue:
+        current_id, path, cost = queue.popleft()
+
+        if current_id == destination_id and cost <= battery_limit:
+            return path, cost
+
+        if (current_id, cost) in visited:
+            continue
+        visited.add((current_id, cost))
+
+        for edge in graph.get_edges():
+            if edge.origin.id == current_id:
+                neighbor = edge.destination
+                new_cost = cost + edge.weight
+
+                # Si se supera la batería, sólo se continúa si el nodo es de recarga
+                if new_cost <= battery_limit:
+                    queue.append((neighbor.id, path + [neighbor.id], new_cost))
+                elif neighbor.type == "recarga":
+                    queue.append((neighbor.id, path + [neighbor.id], edge.weight))  # recarga resetea batería
+            elif edge.destination.id == current_id:
+                neighbor = edge.origin
+                new_cost = cost + edge.weight
+                if new_cost <= battery_limit:
+                    queue.append((neighbor.id, path + [neighbor.id], new_cost))
+                elif neighbor.type == "recarga":
+                    queue.append((neighbor.id, path + [neighbor.id], edge.weight))  # resetea batería
+
+    return None, None  # No se encontró ruta válida
+
+with tabs[1]:
+    st.subheader("📡 Red de Nodos")
+
+    if st.session_state.get("sim_started") and "graph" in st.session_state:
+        
+        graph = st.session_state.graph
+        adapter = NetworkXAdapter(graph)
+
+        # Dibujar una red
+        fig = adapter.draw_network()
+        st.pyplot(fig)
+
+        st.markdown("---")
+        st.subheader("✈ Buscar Ruta")
+
+        node_ids = [node.id for node in graph.get_vertices()]
+        origin_id = st.selectbox("🌍 Nodo Origen", node_ids)
+        destination_id = st.selectbox("🎯 Nodo Destino", node_ids)
+
+        if st.button("🔍 Calcular Ruta"):
+            path, cost = bfs_with_battery(graph, origin_id, destination_id, battery_limit=50)
+
+            if path:
+                st.success(f"✅ Ruta encontrada: {' → '.join(path)} | Costo total: {cost}")
+                # Vuelve a dibujar la red con la ruta en rojo
+                st.pyplot(adapter.draw_network(route=path))
+
+                if st.button("✅ Complete Delivery and Create Order"):
+                    st.success("📦 Pedido registrado correctamente.")
+            else:
+                st.error("❌ No se encontró una ruta válida dentro del límite de batería, ni usando recarga.")
+    else:
+        st.warning("⚠️ Inicia primero una simulación para visualizar la red.")
+
+
+with tabs[2]:
+    st.subheader("📋 Pedidos y Clientes")
+    st.warning("📦 Visualización de pedidos en desarrollo.")
+
+
+with tabs[3]:
+    st.subheader("🚦 Analisis de Rutas")
+    st.warning("🚦 Análisis de rutas en desarrollo.")
+
+    if st.session_state.get("sim_started"):
+
+        class DummyAVLNode:
+            def __init__(self, key, route, frequency):
+                self.key = key
+                self.route = route
+                self.frequency = frequency
+                self.left = None
+                self.right = None
+
+        class DummyAVLTree:
+            def __init__(self):
+                self.root = DummyAVLNode("A-B-C", ["A", "B", "C"], 5)
+
+        dummy_avl = DummyAVLTree()
+        visualizer = AVLVisualizer(dummy_avl)
+        st.pyplot(visualizer.draw())
+    
+    else:
+        st.warning("⚠️ Inicia primero una simulación para visualizar las rutas más frecuentes.")
+
+
+
+       
+
+    
+
+
+
+    
