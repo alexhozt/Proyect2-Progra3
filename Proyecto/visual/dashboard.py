@@ -11,7 +11,7 @@ from model.graph import Node, Graph
 from model.edge import Edge
 from networkx_adapter import NetworkXAdapter
 from collections import deque
-from avl_visualizer import AVLVisualizer
+from avl_visualizer import AVLTree, AVLVisualizer
 
 
 
@@ -248,15 +248,26 @@ with tabs[1]:
             path, cost = bfs_with_battery(graph, origin_id, destination_id, battery_limit=50)
 
             if path:
+                # Guardar en session_state para mantener la ruta después del clic
+                st.session_state.current_path = path
+                st.session_state.current_cost = cost
                 st.success(f"✅ Ruta encontrada: {' → '.join(path)} | Costo total: {cost}")
-               
-                # Vuelve a dibujar la red con la ruta en rojo
                 st.pyplot(adapter.draw_network(route=path))
-
-                if st.button("✅ Complete Delivery and Create Order"):
-                    st.success("📦 Pedido registrado correctamente.")
             else:
                 st.error("❌ No se encontró una ruta válida dentro del límite de batería, ni usando recarga.")
+
+        # Mostrar botón de entrega solo si hay ruta encontrada
+        if "current_path" in st.session_state:
+            if st.button("✅ Complete Delivery and Create Order"):
+                route_key = " → ".join(st.session_state.current_path)
+
+                if "route_avl" not in st.session_state:
+                    st.session_state.route_avl = AVLTree()
+
+                st.session_state.route_avl.insert(route_key)
+                st.success("📦 Pedido registrado correctamente.")
+
+            
     else:
         st.warning("⚠️ Inicia primero una simulación para visualizar la red.")
 
@@ -268,28 +279,46 @@ with tabs[2]:
 
 with tabs[3]:
     st.subheader("🚦 Analisis de Rutas")
-    st.warning("🚦 Análisis de rutas en desarrollo.")
-
-    if st.session_state.get("sim_started"):
-
-        class DummyAVLNode:
-            def __init__(self, key, route, frequency):
-                self.key = key
-                self.route = route
-                self.frequency = frequency
-                self.left = None
-                self.right = None
-
-        class DummyAVLTree:
-            def __init__(self):
-                self.root = DummyAVLNode("A-B-C", ["A", "B", "C"], 5)
-
-        dummy_avl = DummyAVLTree()
-        visualizer = AVLVisualizer(dummy_avl)
-        st.pyplot(visualizer.draw())
     
+    if "route_avl" not in st.session_state:
+        st.warning("⚠️ No hay rutas registradas. Completa entregas primero en la pestaña de Rutas.")
     else:
-        st.warning("⚠️ Inicia primero una simulación para visualizar las rutas más frecuentes.")
+        avl_tree = st.session_state.route_avl
+
+        # mostrar lista de rutas ordenadas
+        st.markdown("### 📋 Rutas más frecuentes (ordenadas por nombre):")
+        routes = avl_tree.inorder()
+        if routes:
+            for key, freq in routes:
+                st.markdown(f"- **Ruta:** {key} | **Frecuencia:** {freq}")
+        else:
+            st.warning("⚠️ No hay rutas registradas.")
+
+        st.markdown("---")
+
+        # mostrar visualización del árbol AVL
+        st.subheader("📊 Visualización del Árbol AVL de Rutas")
+        visualizer = AVLVisualizer()
+        fig = visualizer.draw(avl_tree.root)
+        st.pyplot(fig)
+
+
+
+
+        
+
+
+
+
+
+
+
+
+
+
+
+    
+
 
 
 
