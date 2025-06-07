@@ -274,7 +274,46 @@ with tabs[1]:
 
 with tabs[2]:
     st.subheader("📋 Pedidos y Clientes")
-    st.warning("📦 Visualización de pedidos en desarrollo.")
+
+    if st.session_state.get("sim_started") and "graph" in st.session_state:
+        graph = st.session_state.graph
+        node_ids = [node.id for node in graph.get_vertices()]
+
+        if "orders" not in st.session_state:
+            st.session_state.orders = []
+
+        st.markdown("### ➕ Crear Pedido Manualmente")
+        col1, col2 = st.columns(2)
+        with col1:
+            order_origin = st.selectbox("🌍 Origen del Pedido", node_ids, key="pedido_origen")
+        with col2:
+            order_destination = st.selectbox("🎯 Destino del Pedido", node_ids, key="pedido_destino")
+
+        if st.button("📦 Agregar Pedido"):
+            if order_origin == order_destination:
+                st.error("⚠️ El origen y destino no pueden ser iguales.")
+            else:
+                path, cost = bfs_with_battery(graph, order_origin, order_destination)
+                if path:
+                    st.session_state.orders.append({
+                        "origen": order_origin,
+                        "destino": order_destination,
+                        "ruta": path,
+                        "costo": cost
+                    })
+                    st.success("✅ Pedido agregado correctamente.")
+                else:
+                    st.error("❌ No se encontró una ruta válida para este pedido.")
+
+        if st.session_state.orders:
+            st.markdown("### 📄 Pedidos Registrados")
+            for i, order in enumerate(st.session_state.orders, start=1):
+                st.markdown(f"**Pedido #{i}**: {order['origen']} → {order['destino']} | Ruta: {' → '.join(order['ruta'])} | Costo: {order['costo']}")
+        else:
+            st.info("No hay pedidos registrados todavía.")
+    else:
+        st.warning("⚠️ Inicia primero una simulación para registrar pedidos.")
+
 
 
 with tabs[3]:
