@@ -1,6 +1,6 @@
 import random
 from dataclasses import dataclass, asdict
-from typing import List
+from typing import List, Dict
 from datetime import datetime
 
 @dataclass
@@ -10,6 +10,7 @@ class Client:
     type: str  # "regular" o "premium"
     total_orders: int = 0
     created_at: str = None
+    node_id: str = None  # ID del nodo asociado en el grafo
     
     def __post_init__(self):
         if self.created_at is None:
@@ -21,37 +22,40 @@ class Client:
 class ClientManager:
     def __init__(self):
         self.clients = []
+        self.client_by_node_id = {}  # Diccionario para búsqueda rápida
     
-    def generate_clients(self, num_clients: int) -> List[Client]:
-        """Genera una lista de clientes con IDs únicos y tipos aleatorios"""
+    def generate_clients(self, client_nodes: List) -> List[Client]:
+        """Genera clientes asociados a nodos del grafo"""
         self.clients = []
+        self.client_by_node_id = {}
         
-        for i in range(1, num_clients + 1):
+        for i, node in enumerate(client_nodes, 1):
             client_id = f"C{str(i).zfill(3)}"
             name = f"Client{i}"
-            client_type = "premium" if random.random() < 0.3 else "regular"  # 30% premium, 70% regular
+            client_type = "premium" if random.random() < 0.3 else "regular"
             
-            self.clients.append(Client(
+            client = Client(
                 client_id=client_id,
                 name=name,
-                type=client_type
-            ))
+                type=client_type,
+                node_id=node.id  # Asociamos el ID del nodo
+            )
+            
+            self.clients.append(client)
+            self.client_by_node_id[node.id] = client
         
         return self.clients
     
-    def get_client_by_id(self, client_id: str) -> Client:
-        """Obtiene un cliente por su ID"""
-        for client in self.clients:
-            if client.client_id == client_id:
-                return client
-        return None
+    def get_client_by_node_id(self, node_id: str) -> Client:
+        """Obtiene cliente por ID de nodo"""
+        return self.client_by_node_id.get(node_id)
     
-    def increment_order_count(self, client_id: str):
-        """Incrementa el contador de pedidos para un cliente"""
-        client = self.get_client_by_id(client_id)
+    def increment_order_count(self, node_id: str):
+        """Incrementa contador de pedidos para un cliente"""
+        client = self.get_client_by_node_id(node_id)
         if client:
             client.total_orders += 1
     
     def to_json(self) -> List[dict]:
-        """Devuelve la lista de clientes en formato JSON"""
+        """Devuelve lista de clientes en formato JSON"""
         return [client.to_dict() for client in self.clients]

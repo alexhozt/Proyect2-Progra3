@@ -9,10 +9,11 @@ class Order:
     order_id: str
     client: str
     client_id: str
+    node_id: str  # ID del nodo cliente en el grafo
     origin: str
     destination: str
-    status: str  # "pending", "in_progress", "delivered", "cancelled"
-    priority: int  # 0 (normal), 1 (alta), 2 (urgente)
+    status: str
+    priority: int
     created_at: str
     delivered_at: Optional[str] = None
     route_cost: Optional[int] = None
@@ -21,35 +22,31 @@ class Order:
         return asdict(self)
     
     def mark_as_delivered(self):
-        """Marca el pedido como entregado"""
         self.status = "delivered"
         self.delivered_at = datetime.now().isoformat()
 
 class OrderManager:
-    def __init__(self, clients: list):
+    def __init__(self, client_manager):
         self.orders = []
-        self.clients = clients
+        self.client_manager = client_manager
     
-    def generate_initial_orders(self, num_orders: int, nodes: list) -> List[Order]:
-        """Genera pedidos iniciales aleatorios"""
+    def generate_initial_orders(self, num_orders: int, client_nodes: list, all_nodes: list):
+        """Genera pedidos iniciales asociados a nodos cliente"""
         self.orders = []
-        
-        # Filtrar nodos que son clientes (asumiendo que tienen type="cliente")
-        client_nodes = [node for node in nodes if node.type == "cliente"]
         
         for _ in range(num_orders):
-            # Seleccionar cliente aleatorio
+            # Seleccionar nodo cliente aleatorio
             client_node = random.choice(client_nodes)
-            client = next((c for c in self.clients if c.client_id == client_node.id), None)
+            client = self.client_manager.get_client_by_node_id(client_node.id)
             
             if not client:
-                continue  # Si no encontramos el cliente, saltamos
+                continue
                 
-            # Seleccionar origen y destino aleatorios (el destino debe ser diferente al origen)
-            origin = random.choice([n for n in nodes if n.id != client_node.id]).id
-            destination = client_node.id
+            # Seleccionar origen (no puede ser el mismo nodo cliente)
+            possible_origins = [n for n in all_nodes if n.id != client_node.id]
+            origin_node = random.choice(possible_origins)
             
-            # Determinar prioridad (70% normal, 20% alta, 10% urgente)
+            # Determinar prioridad
             rand = random.random()
             if rand < 0.7:
                 priority = 0
@@ -62,22 +59,26 @@ class OrderManager:
                 order_id=str(uuid.uuid4()),
                 client=client.name,
                 client_id=client.client_id,
-                origin=origin,
-                destination=destination,
+                node_id=client_node.id,  # ID del nodo en el grafo
+                origin=origin_node.id,
+                destination=client_node.id,
                 status="pending",
                 priority=priority,
-                created_at=datetime.now().isoformat(),
-                route_cost=None  # Se calculará más tarde
+                created_at=datetime.now().isoformat()
             ))
         
         return self.orders
     
-    def get_pending_orders(self) -> List[Order]:
-        """Obtiene todos los pedidos pendientes"""
-        return [order for order in self.orders if order.status == "pending"]
+    def complete_order(self, order_id: str, route_cost: int):
+        """Marca un pedido como completado y actualiza el cliente"""
+        order = next((o for o in self.orders if o.order_id == order_id), None)
+        if order:
+            order.mark_as_delivered()
+            order.route_cost = route_cost
+            self.client_manager.increment_order_count(order.node_id)
     
-    def to_json(self) -> List[dict]:
-        """Devuelve la lista de pedidos en formato JSON"""
+    def get_pending_orders(self):
+        return [o for o in self.orders if o.status == "pending"]
+    
+    def to_json(self):
         return [order.to_dict() for order in self.orders]
-    
-    

@@ -187,17 +187,22 @@ with tabs[0]:
         
         # Crear y guardar grafo en session_state
         st.session_state.graph = generate_graph(number_of_nodes, number_of_edges)
-        # Generar clientes
+        
+        # Obtener nodos cliente del grafo
+        all_nodes = st.session_state.graph.get_vertices()
+        client_nodes = [n for n in all_nodes if n.type == 'cliente']
+        
+        # Generar clientes asociados a nodos
         client_manager = ClientManager()
-        clients = client_manager.generate_clients(new_func(client_nodes))
+        client_manager.generate_clients(client_nodes)
         st.session_state.client_manager = client_manager
-        st.session_state.client_nodes = client_nodes
-
-        # Generar pedidos iniciales
-        order_manager = OrderManager(clients)
-        orders = order_manager.generate_initial_orders(
-            number_of_orders, 
-            st.session_state.graph.get_vertices()
+        
+        # Generar pedidos
+        order_manager = OrderManager(client_manager)
+        order_manager.generate_initial_orders(
+            number_of_orders,
+            client_nodes,
+            all_nodes
         )
         st.session_state.order_manager = order_manager
               
@@ -278,6 +283,14 @@ with tabs[1]:
         if "current_path" in st.session_state:
             if st.button("✅ Complete Delivery and Create Order"):
                 route_key = " → ".join(st.session_state.current_path)
+                
+                # Marcar pedido como completado
+                if st.session_state.get("current_order"):
+                    order_manager = st.session_state.order_manager
+                    order_manager.complete_order(
+                        st.session_state.current_order.order_id,
+                        st.session_state.current_cost
+                )
 
                 if "route_avl" not in st.session_state:
                     st.session_state.route_avl = AVLTree()
@@ -292,21 +305,37 @@ with tabs[1]:
 
 with tabs[2]:
     st.subheader("📋 Pedidos y Clientes")
-
+    
     if st.session_state.get("sim_started"):
         tab1, tab2 = st.tabs(["👤 Clientes", "📦 Pedidos"])
         
         with tab1:
             st.markdown("### 👤 Lista de Clientes")
             if "client_manager" in st.session_state:
-                st.json(st.session_state.client_manager.to_json())
+                # Ordenar clientes por ID
+                clients = sorted(
+                    st.session_state.client_manager.clients,
+                    key=lambda x: x.client_id
+                )
+                st.json([c.to_dict() for c in clients])
             else:
                 st.warning("No se han generado clientes aún.")
         
         with tab2:
             st.markdown("### 📦 Pedidos")
             if "order_manager" in st.session_state:
-                st.json(st.session_state.order_manager.to_json())
+                # Ordenar pedidos por estado y prioridad
+                orders = sorted(
+                    st.session_state.order_manager.orders,
+                    key=lambda x: (x.status != 'pending', -x.priority)
+                )
+                st.json([o.to_dict() for o in orders])
+                
+                # Mostrar estadísticas
+                pending = len([o for o in orders if o.status == "pending"])
+                delivered = len([o for o in orders if o.status == "delivered"])
+                st.metric("Pedidos pendientes", pending)
+                st.metric("Pedidos entregados", delivered)
             else:
                 st.warning("No se han generado pedidos aún.")
     else:
