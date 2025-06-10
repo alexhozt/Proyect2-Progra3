@@ -12,6 +12,8 @@ from model.edge import Edge
 from networkx_adapter import NetworkXAdapter
 from collections import deque
 from avl_visualizer import AVLTree, AVLVisualizer
+from domain.client import ClientManager
+from domain.order import OrderManager
 
 
 
@@ -87,6 +89,9 @@ tabs = st.tabs(["🎮 Simulación", "📡 Red de Nodos", "📋 Pedidos", "🚦 R
 
 
 # ===== TAB 1 - Simulación =====
+def new_func(client_nodes):
+    return client_nodes
+
 with tabs[0]:
     st.subheader("🎮 Parámetros de la Simulación")
 
@@ -182,6 +187,19 @@ with tabs[0]:
         
         # Crear y guardar grafo en session_state
         st.session_state.graph = generate_graph(number_of_nodes, number_of_edges)
+        # Generar clientes
+        client_manager = ClientManager()
+        clients = client_manager.generate_clients(new_func(client_nodes))
+        st.session_state.client_manager = client_manager
+        st.session_state.client_nodes = client_nodes
+
+        # Generar pedidos iniciales
+        order_manager = OrderManager(clients)
+        orders = order_manager.generate_initial_orders(
+            number_of_orders, 
+            st.session_state.graph.get_vertices()
+        )
+        st.session_state.order_manager = order_manager
               
     if st.session_state.get("sim_started", False):
         st.info("🔄 Simulación en curso... Espere a que se completen los cálculos.")
@@ -275,44 +293,24 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("📋 Pedidos y Clientes")
 
-    if st.session_state.get("sim_started") and "graph" in st.session_state:
-        graph = st.session_state.graph
-        node_ids = [node.id for node in graph.get_vertices()]
-
-        if "orders" not in st.session_state:
-            st.session_state.orders = []
-
-        st.markdown("### ➕ Crear Pedido Manualmente")
-        col1, col2 = st.columns(2)
-        with col1:
-            order_origin = st.selectbox("🌍 Origen del Pedido", node_ids, key="pedido_origen")
-        with col2:
-            order_destination = st.selectbox("🎯 Destino del Pedido", node_ids, key="pedido_destino")
-
-        if st.button("📦 Agregar Pedido"):
-            if order_origin == order_destination:
-                st.error("⚠️ El origen y destino no pueden ser iguales.")
+    if st.session_state.get("sim_started"):
+        tab1, tab2 = st.tabs(["👤 Clientes", "📦 Pedidos"])
+        
+        with tab1:
+            st.markdown("### 👤 Lista de Clientes")
+            if "client_manager" in st.session_state:
+                st.json(st.session_state.client_manager.to_json())
             else:
-                path, cost = bfs_with_battery(graph, order_origin, order_destination)
-                if path:
-                    st.session_state.orders.append({
-                        "origen": order_origin,
-                        "destino": order_destination,
-                        "ruta": path,
-                        "costo": cost
-                    })
-                    st.success("✅ Pedido agregado correctamente.")
-                else:
-                    st.error("❌ No se encontró una ruta válida para este pedido.")
-
-        if st.session_state.orders:
-            st.markdown("### 📄 Pedidos Registrados")
-            for i, order in enumerate(st.session_state.orders, start=1):
-                st.markdown(f"**Pedido #{i}**: {order['origen']} → {order['destino']} | Ruta: {' → '.join(order['ruta'])} | Costo: {order['costo']}")
-        else:
-            st.info("No hay pedidos registrados todavía.")
+                st.warning("No se han generado clientes aún.")
+        
+        with tab2:
+            st.markdown("### 📦 Pedidos")
+            if "order_manager" in st.session_state:
+                st.json(st.session_state.order_manager.to_json())
+            else:
+                st.warning("No se han generado pedidos aún.")
     else:
-        st.warning("⚠️ Inicia primero una simulación para registrar pedidos.")
+        st.warning("⚠️ Ejecuta primero una simulación para ver los clientes y pedidos.")
 
 
 
@@ -341,6 +339,10 @@ with tabs[3]:
         fig = visualizer.draw(avl_tree.root)
         st.pyplot(fig)
 
+
+with tabs[4]:
+    st.subheader("📈 Estadísticas")
+    st.warning("Esta sección está en desarrollo. Pronto podrás ver estadísticas detalladas de la simulación.")
 
 
 
