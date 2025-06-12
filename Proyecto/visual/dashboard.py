@@ -3,6 +3,7 @@ import random
 import string
 import sys
 import os
+import matplotlib.pyplot as plt
 
 # Agrega el directorio raíz del proyecto a sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -13,8 +14,8 @@ from networkx_adapter import NetworkXAdapter
 from collections import deque
 from avl_visualizer import AVLTree, AVLVisualizer
 from domain.client import ClientManager
-from domain.order import OrderManager
-
+from domain.order import OrderManager, Order
+from auxilar_func.statics import Statics
 
 
 
@@ -248,6 +249,61 @@ def bfs_with_battery(graph, origin_id, destination_id, battery_limit=50):
 
     return None, None  # No se encontró ruta válida
 
+# funcion auxiliar de registrar entrega
+def registrar_entrega():
+
+    path = st.session_state.current_path
+    route_key = " → ".join(path)
+
+    # Inicializa AVL si no existe
+    if "route_avl" not in st.session_state:
+        st.session_state.route_avl = AVLTree()
+    st.session_state.route_avl.insert(route_key)
+
+    # Inicializa visitas si no existe
+    if "visitas_por_nodo" not in st.session_state:
+        st.session_state.visitas_por_nodo = {}
+
+    # Registrar visitas por cada nodo en la ruta
+    for nodo_id in path:
+        st.session_state.visitas_por_nodo[nodo_id] = st.session_state.visitas_por_nodo.get(nodo_id, 0) + 1
+
+    # CREAR Y REGISTRAR PEDIDO ENTREGADO
+    order_manager = st.session_state.order_manager
+    client_manager = st.session_state.client_manager
+    destination_id = path[-1]
+
+    client = client_manager.get_client_by_node_id(destination_id)
+
+    if client:
+        from datetime import datetime
+        import uuid
+
+        nueva_orden = Order(
+            order_id=str(uuid.uuid4()),
+            client=client.name,
+            client_id=client.client_id,
+            node_id=destination_id,  # <--- Aquí
+            origin=path[0],
+            destination=destination_id,
+            status="delivered",
+            priority=0,  # o aleatorio si prefieres
+            created_at=datetime.now().isoformat(),
+            delivered_at=datetime.now().isoformat(),
+            route_cost=st.session_state.current_cost
+        )
+
+
+        order_manager.orders.append(nueva_orden)
+        client_manager.increment_order_count(destination_id)
+
+        st.success("📦 Pedido registrado correctamente.")
+        st.rerun()
+    else:
+        st.warning("⚠️ No se pudo registrar el pedido: el nodo destino no está asociado a un cliente.")
+
+
+
 with tabs[1]:
     st.subheader("📡 Red de Nodos")
 
@@ -282,20 +338,7 @@ with tabs[1]:
         # Mostrar botón de entrega solo si hay ruta encontrada
         if "current_path" in st.session_state:
             if st.button("✅ Complete Delivery and Create Order"):
-                route_key = " → ".join(st.session_state.current_path)
-                
-                # Marcar pedido como completado
-                if st.session_state.get("current_order"):
-                    order_manager = st.session_state.order_manager
-                    order_manager.complete_order(
-                        st.session_state.current_order.order_id,
-                        st.session_state.current_cost
-                )
-
-                if "route_avl" not in st.session_state:
-                    st.session_state.route_avl = AVLTree()
-
-                st.session_state.route_avl.insert(route_key)
+                registrar_entrega()
                 st.success("📦 Pedido registrado correctamente.")
 
             
@@ -334,7 +377,7 @@ with tabs[2]:
                 # Mostrar estadísticas
                 pending = len([o for o in orders if o.status == "pending"])
                 delivered = len([o for o in orders if o.status == "delivered"])
-                st.metric("Pedidos pendientes", pending)
+                st.metric("Pedidos pendientes", pending - delivered)
                 st.metric("Pedidos entregados", delivered)
             else:
                 st.warning("No se han generado pedidos aún.")
@@ -371,7 +414,54 @@ with tabs[3]:
 
 with tabs[4]:
     st.subheader("📈 Estadísticas")
-    st.warning("Esta sección está en desarrollo. Pronto podrás ver estadísticas detalladas de la simulación.")
+
+    if st.session_state.get("sim_started") and "graph" in st.session_state:
+        grafo = st.session_state.graph
+        nodos = grafo.get_vertices()
+        visitas = st.session_state.get("visitas_por_nodo", {})
+
+        # Pie chart
+        roles = {"cliente": 0, "almacenamiento": 0, "recarga": 0}
+        for nodo in nodos:
+            roles[nodo.type] += 1
+
+        st.markdown("### 🥧 Distribución de nodos por tipo")
+        st.pyplot(Statics.pie_chart(roles))
+
+        # Bar chart
+        tipo_visitas = {"cliente": 0, "almacenamiento": 0, "recarga": 0}
+        for nodo in nodos:
+            visitas_nodo = visitas.get(nodo.id, 0)
+            tipo_visitas[nodo.type] += visitas_nodo
+
+        st.markdown("### 📊 Visitas a nodos por tipo")
+        st.pyplot(Statics.bar_chart(tipo_visitas))
+
+        # 👇 Este bloque lo debes incluir DENTRO del if
+        st.markdown("### ⭐ Top nodos más visitados por tipo")
+
+        fig_cliente = Statics.bar_chart_top_nodos(nodos, visitas, "cliente")
+        fig_recarga = Statics.bar_chart_top_nodos(nodos, visitas, "recarga")
+        fig_almacen = Statics.bar_chart_top_nodos(nodos, visitas, "almacenamiento")
+
+        if fig_cliente:
+            st.pyplot(fig_cliente)
+        else:
+            st.info("🔵 No hay visitas registradas a nodos de tipo 'cliente'.")
+
+        if fig_recarga:
+            st.pyplot(fig_recarga)
+        else:
+            st.info("🟢 No hay visitas registradas a nodos de tipo 'recarga'.")
+
+        if fig_almacen:
+            st.pyplot(fig_almacen)
+        else:
+            st.info("🟠 No hay visitas registradas a nodos de tipo 'almacenamiento'.")
+
+
+    else:
+        st.warning("⚠️ Ejecuta primero una simulación para ver estadísticas.")
 
 
 
